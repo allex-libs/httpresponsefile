@@ -1,0 +1,23 @@
+{
+  "name": "allex_httpresponsefilelib",
+  "version": "1.0.0",
+  "description": "AllexJS library for generating files dynamically for the purpose of http response",
+  "main": "index.js",
+  "scripts": {
+    "test": "allex-mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@gitlab.hers.rs:allex_libs/httpresponsefile.git"
+  },
+  "keywords": [
+    "ecosystem:AllexJS",
+    "dynamical",
+    "file",
+    "generation",
+    "http",
+    "response"
+  ],
+  "author": "HERS Belgrade",
+  "license": "ISC"
+}
