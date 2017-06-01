@@ -70,7 +70,7 @@ function createCSVFile (execlib, DynamicFile) {
    * }]
    */
   CsvFile.prototype.headerName = function (field) {
-    return this.fieldContents(field.title || field.name);
+    return this.fieldContents(field[this.headerNameTitleName] || field[this.headerNameFieldName]);
   };
   CsvFile.prototype.headerNames = function (datafields) {
     return datafields.map(this.headerName.bind(this)).join(this.fieldDelimiter);
@@ -98,14 +98,17 @@ function createCSVFile (execlib, DynamicFile) {
     return res;
   };
   CsvFile.prototype.onDataField = function (datafields, dataobject, retobj, datafield, ind) {
-    retobj.ret += this.fieldProducer(dataobject,datafield.name);
+    retobj.ret += this.fieldProducer(dataobject,datafield[this.headerNameFieldName]);
     if (ind < datafields.length-1) {
       retobj.ret += this.fieldDelimiter;
     }
   };
   CsvFile.prototype.fieldProducer = function (dataobject, fieldname) {
     var ret = dataobject[fieldname];
-    if (!lib.isString(ret)) {
+    if (lib.isNumber(ret)) {
+      ret+='';
+    }
+    if (!lib.isString(ret) ) {
       ret = '';
     }
     return this.fieldContents(ret);
@@ -118,6 +121,8 @@ function createCSVFile (execlib, DynamicFile) {
   };
   CsvFile.prototype.fieldDelimiter = ',';
   CsvFile.prototype.textDelimiter = '"';
+  CsvFile.prototype.headerNameFieldName = 'name';
+  CsvFile.prototype.headerNameTitleName = 'title';
 
   return CsvFile;
 }
