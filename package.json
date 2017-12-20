@@ -1,6 +1,6 @@
 {
   "name": "allex_httpresponsefilelib",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "AllexJS library for generating files dynamically for the purpose of http response",
   "main": "index.js",
   "scripts": {
