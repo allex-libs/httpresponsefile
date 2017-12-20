@@ -48,10 +48,25 @@ function createCSVFile (execlib, DynamicFile) {
         this.data = this.csvfile.rowProducer(this.sink.recordDescriptor.fields, this.data, item[2]); 
         break;
       case 're':
-        this.resolve(this.csvfile.initialString(this.sink.recordDescriptor.fields)+this.data);
+        this.resolve(concatwithnewline(this.csvfile.initialString(this.sink.recordDescriptor.fields), this.data));
         break;
     }
   };
+
+  function concatwithnewline (str1, str2) {
+    var str1valid = str1 && str1.length,
+      str2valid = str2 && str2.length;
+    if (str1valid && str2valid) {
+      return str1+'\n'+str2;
+    }
+    if (str1valid) {
+      return str1;
+    }
+    if (str2valid) {
+      return str2;
+    }
+    return '';
+  }
 
   function CsvFile(filename, destroyables){
     DynamicFile.call(this, filename, destroyables);
@@ -81,11 +96,10 @@ function createCSVFile (execlib, DynamicFile) {
     return ret;
   };
   CsvFile.prototype.initialString = function (datafields) {
-    return this.includeHeaders ? this.headerNames(datafields)+'\n' : '';
+    return this.includeHeaders ? this.headerNames(datafields) : '';
   };
   CsvFile.prototype.produceFromDataArray = function (datafields, dataarray) {
-    var ret = this.initialString(datafields);
-    return ret+dataarray.reduce(this.rowProducer.bind(this, datafields), '');
+    return dataarray.reduce(this.rowProducer.bind(this, datafields), this.initialString(datafields));
   };
   CsvFile.prototype.rowProducer = function (datafields, res, dataobject) {
     var retobj = {ret: ''};
