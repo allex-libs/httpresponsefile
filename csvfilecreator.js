@@ -1,77 +1,59 @@
-function createCSVFile (execlib, DynamicFile) {
+function createCSVFile (execlib, DynamicFile, datamixinlib) {
   'use strict';
   var lib = execlib.lib,
-    q = lib.q,
-    qlib = lib.qlib,
-    JobBase = qlib.JobBase;
+    HttpResponseFileDataMixin = datamixinlib.Mixin,
+    ContentsFromDataProducer = HttpResponseFileDataMixin.prototype.ContentsFromDataProducer;
 
-  function DataSinkStreamer (csvfile, sink, filter, visiblefields, defer) {
-    JobBase.call(this, defer);
-    this.csvfile = csvfile;
-    this.sink = sink;
-    this.filter = filter;
-    this.visiblefields = visiblefields;
-    this.queryID = null;
-    this.data = '';
+  function CsvFromDataProducer (file, datafields, options) {
+    ContentsFromDataProducer.call(this, file, datafields, options);
   }
-  lib.inherit(DataSinkStreamer, JobBase);
-  DataSinkStreamer.prototype.destroy = function () {
-    if (this.sink && this.queryID) {
-      this.sink.sessionCall('closeQuery', this.queryID);
-    }
-    this.data = null;
-    this.queryID = null;
-    this.visiblefields = null;
-    this.filter = null;
-    this.sink = null;
-    this.csvfile = null;
-    JobBase.prototype.destroy.call(this);
+  lib.inherit(CsvFromDataProducer, ContentsFromDataProducer);
+  CsvFromDataProducer.prototype.initialData = function () {
+    return (this.file && this.file.includeHeaders) ? this.headerNames() : '';
   };
-  DataSinkStreamer.prototype.go = function () {
-    if (!this.sink) {
-      this.resolve(null);
+  CsvFromDataProducer.prototype.headerNames = function () {
+    return this.datafields.map(this.file.headerName.bind(this.file)).join(this.file.fieldDelimiter);
+  };
+  CsvFromDataProducer.prototype.produceRow = function (dataobject) {
+    this.addRow(this.datafields.reduce(this.onDataField.bind(this, dataobject), ''));
+  };
+  CsvFromDataProducer.prototype.onDataField = function (dataobject, result, datafield, ind) {
+    result += this.fieldProducer(dataobject,datafield[this.file.headerNameFieldName]);
+    if (ind < this.datafields.length-1) {
+      result += this.file.fieldDelimiter;
+    }
+    return result;
+  };
+  CsvFromDataProducer.prototype.fieldProducer = function (dataobject, fieldname) {
+    var ret = dataobject[fieldname];
+    if (lib.isNumber(ret)) {
+      ret+='';
+    }
+    if (!lib.isString(ret) ) {
+      ret = '';
+    }
+    return this.file.fieldContents(ret);
+  };
+  CsvFromDataProducer.prototype.addRow = function (row) {
+    if (!lib.isString(row) && row) {
       return;
     }
-    this.sink.sessionCall('query', {singleshot: false, continuous: true, filter: this.filter, visiblefields: this.visiblefields}).then(
-      null, this.reject.bind(this), this.onStream.bind(this)
-    );
+    if (this.data.length) {
+      this.data += '\n';
+    }
+    this.data += row;
   };
-  DataSinkStreamer.prototype.onStream = function (item) {
-    if (!lib.isArray(item)) {
-      return;
-    }
-    switch (item[0]) {
-      case 'i':
-        this.queryID = item[1];
-        break;
-      case 'r1':
-        this.data = this.csvfile.rowProducer(this.sink.recordDescriptor.fields, this.data, item[2]); 
-        break;
-      case 're':
-        this.resolve(concatwithnewline(this.csvfile.initialString(this.sink.recordDescriptor.fields), this.data));
-        break;
-    }
-  };
-
-  function concatwithnewline (str1, str2) {
-    var str1valid = str1 && str1.length,
-      str2valid = str2 && str2.length;
-    if (str1valid && str2valid) {
-      return str1+'\n'+str2;
-    }
-    if (str1valid) {
-      return str1;
-    }
-    if (str2valid) {
-      return str2;
-    }
-    return '';
-  }
 
   function CsvFile(filename, destroyables){
     DynamicFile.call(this, filename, destroyables);
+    HttpResponseFileDataMixin.call(this);
   }
   lib.inherit(CsvFile, DynamicFile);
+  HttpResponseFileDataMixin.addMethods(CsvFile);
+  CsvFile.prototype.destroy = function () {
+    HttpResponseFileDataMixin.prototype.destroy.call(this);
+    DynamicFile.prototype.destroy.call(this);
+  };
   CsvFile.prototype.contentType = function () {
     return 'text/csv';
   };
@@ -84,59 +66,15 @@ function createCSVFile (execlib, DynamicFile) {
    *  title: 'Field1'
    * }]
    */
-  CsvFile.prototype.headerName = function (field) {
-    return this.fieldContents(field[this.headerNameTitleName] || field[this.headerNameFieldName]);
-  };
-  CsvFile.prototype.headerNames = function (datafields) {
-    return datafields.map(this.headerName.bind(this)).join(this.fieldDelimiter);
-  };
-  CsvFile.prototype.streamInFromDataSink = function (sink, filter, visiblefields) {
-    var job = new DataSinkStreamer(this, sink, filter, visiblefields), ret = job.defer.promise;
-    job.go();
-    return ret;
-  };
-  CsvFile.prototype.initialString = function (datafields) {
-    return this.includeHeaders ? this.headerNames(datafields) : '';
-  };
-  CsvFile.prototype.produceFromDataArray = function (datafields, dataarray) {
-    return dataarray.reduce(this.rowProducer.bind(this, datafields), this.initialString(datafields));
-  };
-  CsvFile.prototype.rowProducer = function (datafields, res, dataobject) {
-    var retobj = {ret: ''};
-    datafields.forEach(this.onDataField.bind(this, datafields, dataobject, retobj));
-    if (res.length) {
-      res += '\n';
-    }
-    res += retobj.ret;
-    retobj = null;
-    return res;
-  };
-  CsvFile.prototype.onDataField = function (datafields, dataobject, retobj, datafield, ind) {
-    retobj.ret += this.fieldProducer(dataobject,datafield[this.headerNameFieldName]);
-    if (ind < datafields.length-1) {
-      retobj.ret += this.fieldDelimiter;
-    }
-  };
-  CsvFile.prototype.fieldProducer = function (dataobject, fieldname) {
-    var ret = dataobject[fieldname];
-    if (lib.isNumber(ret)) {
-      ret+='';
-    }
-    if (!lib.isString(ret) ) {
-      ret = '';
-    }
-    return this.fieldContents(ret);
-  };
   CsvFile.prototype.fieldContents = function (string) {
     if (string.indexOf(this.fieldDelimiter) >= 0) {
       string = this.textDelimiter+string+this.textDelimiter;
     }
     return string;
   };
+  CsvFile.prototype.ContentsFromDataProducer = CsvFromDataProducer;
   CsvFile.prototype.fieldDelimiter = ',';
   CsvFile.prototype.textDelimiter = '"';
-  CsvFile.prototype.headerNameFieldName = 'name';
-  CsvFile.prototype.headerNameTitleName = 'title';
 
   return CsvFile;
 }
